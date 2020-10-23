@@ -7,6 +7,8 @@ az login
 az account list --output table
 
 #Select subscription to delete resource within
+az account list --output table
+az account set --subscription "<insert subscription name or id here>"
 
 #Please be careful running the commands in the next section as this will delete resources in every resource group associated with the subscription you've selected above
 #Please make sure you have the right subscription selected before continuing
