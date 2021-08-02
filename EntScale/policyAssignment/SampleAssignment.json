@@ -1,0 +1,88 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-08-01/managementGroupDeploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "environment": {
+           "type": "string",
+            "allowedValues": [
+                "DEV",
+                "PROD"
+            ],
+            "metadata": {
+                "description": "Input will determine if the deployment goes to DEV or PROD"
+            }
+        },
+        "policyAssignmentEnforcementMode": {
+            "type": "string",
+            "allowedValues": [
+                "Default",
+                "DoNotEnforce"
+            ],
+            "metadata": {
+                "description": "Input will determine if the policyAssignment should be enforced or not."
+            }
+        },
+        "policyDefinitionName": {
+            "type": "string",
+            "metadata": {
+                "description": "Provide the policyDefinitionName (which should always exist at the top level management group, e.g., ESLZ, or DEV-ESLZ)."
+            }
+        },
+        "policyEffect": {
+            "type": "string",
+            "allowedValues": [
+                "audit",
+                "deployIfNotExists",
+                "auditIfNotExists",
+                "append",
+                "modify",
+                "Deny",
+                "deny"
+            ]
+        },
+        "nonCompliantMessage": {
+            "type": "string",
+            "defaultValue": ""
+        }
+    },
+    "variables": {
+        "policyDefinitionId": "[concat('/providers/Microsoft.Management/managementGroups/', parameters('environment'), '/providers/Microsoft.Authorization/policyDefinitions/', parameters('policyDefinitionName'))]",
+        "assignmentName": "[take(concat(parameters('policyDefinitionName'), '-assign'), 24)]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Authorization/policyAssignments",
+            "apiVersion": "2020-09-01",
+            "name": "[variables('assignmentName')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "location": "[deployment().location]",
+            "properties": {
+                "description": "[concat('Assignment of policy ', parameters('policyDefinitionName'))]",
+                "displayName": "[concat('Assignment of policy ', parameters('policyDefinitionName'))]",
+                "policyDefinitionId": "[variables('policyDefinitionId')]",
+                "enforcementMode": "[parameters('policyAssignmentEnforcementMode')]",
+                "nonComplianceMessages": [
+                    {
+                        "message": "[parameters('nonCompliantMessage')]"
+                    }
+                ]
+            }
+        },
+        {
+            "condition": "[or(equals(parameters('policyEffect'), 'modify'), equals(parameters('policyEffect'), 'deployIfNotExists'))]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2019-04-01-preview",
+            "name": "[guid(concat(parameters('environment'), parameters('policyDefinitionName')))]",
+            "dependsOn": [
+                "[variables('assignmentName')]"
+            ],
+            "properties": {
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[if(or(equals(parameters('policyEffect'), 'modify'), equals(parameters('policyEffect'), 'deployIfNotExists')), reference(variables('policyDefinitionId'), '2018-05-01').policyRule.then.details.roleDefinitionIds[0], 'na')]",
+                "principalId": "[if(or(equals(parameters('policyEffect'), 'modify'), equals(parameters('policyEffect'), 'deployIfNotExists')), toLower(reference(variables('assignmentName'), '2020-09-01', 'Full').identity.principalId), 'na')]"
+            }
+        }
+    ]
+}
